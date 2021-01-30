@@ -13,4 +13,4 @@ This script helps you download images from Google Chrome for a set of keywords p
 
 1. Make sure pre-requisites are installed
 2. Populate keywords for which images are to be downloaded in 'queries.csv', each keyword in a new row
-3. python PyImageScraper.py 
+3. run ```python PyImageScraper.py``` 
