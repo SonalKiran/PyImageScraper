@@ -6,16 +6,21 @@ import os
 import concurrent.futures
 import base64
 import ast
+from selenium.common.exceptions import WebDriverException
+from selenium.common.exceptions import TimeoutException
 
 # function to fetch urls
-def fetch_url(SEARCH_QUERY, COUNT = 20):
+def fetch_url(search_query, url_count = 20):
     browser = webdriver.Chrome()
-    search_url = f"https://www.google.com/search?site=&tbm=isch&source=hp&biw=1873&bih=990&q={SEARCH_QUERY}"
+    search_url = f"https://www.google.com/search?site=&tbm=isch&source=hp&biw=1873&bih=990&q={search_query}"
     images_url = []
 
     # open browser and begin search
     browser.get(search_url)
-    elements = browser.find_elements_by_class_name('rg_i')
+    try:
+        elements = browser.find_elements_by_class_name('rg_i')
+    except TimeoutException:
+        print("Loading took too much time!")
 
     count = 0
     for e in elements:
@@ -23,35 +28,35 @@ def fetch_url(SEARCH_QUERY, COUNT = 20):
         try:
             e.click()
             time.sleep(1.5)
-        except Exception:
-            print(f"Exception occurred: {e}")
+            element = browser.find_elements_by_class_name('v4dQwb')
+            # Google Chrome logic
+            if count == 0:
+                big_img = element[0].find_element_by_class_name('n3VNCb')
+                count += 1
+            else:
+                big_img = element[1].find_element_by_class_name('n3VNCb')
+                count += 1
+            images_url.append(big_img.get_attribute("src"))
+        except WebDriverException as e:
+            print(f"Web Driver Exception Occurred: {e.__str__()}")
             continue
 
-        element = browser.find_elements_by_class_name('v4dQwb')
-
-        # Google Chrome logic
-        if count == 0:
-            big_img = element[0].find_element_by_class_name('n3VNCb')
-            count += 1
-        else:
-           big_img = element[1].find_element_by_class_name('n3VNCb')
-           count += 1
-
-        images_url.append(big_img.get_attribute("src"))
-
         # save urls for the given search query in a dictionary
-        if len(images_url) == COUNT:
+        if len(images_url) == url_count:
             global master_urls
-            master_urls[SEARCH_QUERY] = images_url
+            master_urls[search_query] = images_url
             browser.quit()
             break
 
 # function to fetch images
 def fetch_img(sess, url, filename):
     if 'base64' in url:
-        b64 = url[23:]
-        with open(filename, 'wb') as f:
-            f.write(base64.b64decode(b64))
+        try:
+            b64 = url[url.index('base64')+6:]
+            with open(filename, 'wb') as f:
+                f.write(base64.b64decode(b64))
+        except Exception as e:
+            print(f"Base64 to Image - Exception Occurred: {e.__str__()}")
     else:
         try:
             r = sess.get(url, stream = True, timeout=3)
@@ -64,7 +69,7 @@ def fetch_img(sess, url, filename):
             else:
                 print(f'Unable to downloaded image: {filename}')
         except Exception as e:
-            print(f"Exception occurred: {e}")
+            print(f"Exception Occurred: {e.__str__()}")
 
 # retrieve master_urls dict from keyword_urls.txt
 # with open('./keyword_urls.txt', 'r') as file:
@@ -90,11 +95,15 @@ def main():
 
     # fetch urls using multithreading and save to master_urls dict
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as exec:
-        future = [exec.submit(fetch_url, SEARCH_QUERY=val, COUNT=30) for
+        future = [exec.submit(fetch_url, search_query=val, url_count=10) for
                   val in keywords]
 
+    #  ensure dest_dir exists
+    if not os.path.exists(dest_dir):
+        os.mkdir(dest_dir)
+
     # save master_urls in text file for future reference
-    with open('./keyword_urls.txt', 'w') as file:
+    with open(os.path.join(dest_dir,'keyword_urls.txt'), 'w') as file:
         file.write(str(master_urls))
 
     for key, values in master_urls.items():
